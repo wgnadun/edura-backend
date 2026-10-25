@@ -1,0 +1,83 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Test: service",
+      "detail": "Run one service's unit tests (pick the service)",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": ["-m", "pytest", "${input:service}", "-v"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": { "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/${input:service}" }
+      },
+      "windows": {
+        "options": {
+          "env": { "PYTHONPATH": "${workspaceFolder};${workspaceFolder}\\${input:service}" }
+        }
+      },
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Test: service with coverage",
+      "detail": "Run one service's unit tests and print missed lines",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": [
+        "-m", "pytest", "${input:service}",
+        "--cov=${input:service}", "--cov-report=term-missing"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": { "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/${input:service}" }
+      },
+      "windows": {
+        "options": {
+          "env": { "PYTHONPATH": "${workspaceFolder};${workspaceFolder}\\${input:service}" }
+        }
+      },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Test: current file",
+      "detail": "Run the test file open in the editor",
+      "type": "process",
+      "command": "${command:python.interpreterPath}",
+      "args": ["-m", "pytest", "${relativeFile}", "-v"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": { "PYTHONPATH": "${workspaceFolder}:${fileDirname}/.." }
+      },
+      "windows": {
+        "options": {
+          "env": { "PYTHONPATH": "${workspaceFolder};${fileDirname}\\.." }
+        }
+      },
+      "group": "test",
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "service",
+      "type": "pickString",
+      "description": "Service to test",
+      "default": "admin_service",
+      "options": [
+        "admin_service",
+        "analytics_service",
+        "assessment_service",
+        "auth_service",
+        "content_service",
+        "course_service",
+        "enrollment_service",
+        "notification_service",
+        "payment_service",
+        "progress_service",
+        "user_service"
+      ]
+    }
+  ]
+}
