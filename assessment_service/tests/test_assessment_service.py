@@ -1198,6 +1198,23 @@ def test_my_last_attempt(db):
     assert data["session_id"] == ""
 
 
+def test_my_last_attempt_is_served_on_the_api_prefixed_path(db):
+    exam = _exam(db, pass_score=50)
+    q = _question(db, exam.id, answer="A")
+    _graded(
+        db,
+        exam.id,
+        score=100,
+        answers_json=json.dumps([{"question_id": q.id, "selected_option": "A"}]),
+    )
+
+    resp = client.get(f"/api/assessments/{exam.id}/my-last-attempt", headers=STUDENT)
+    assert resp.status_code == 200
+    assert resp.json()["score"] == 100.0
+    # Negative: no token
+    assert client.get(f"/api/assessments/{exam.id}/my-last-attempt").status_code == 401
+
+
 def test_my_last_attempt_404_without_one(db):
     exam = _exam(db)
     resp = client.get(f"/{exam.id}/my-last-attempt", headers=STUDENT)

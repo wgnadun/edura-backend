@@ -385,3 +385,87 @@ def test_memory_redis_client_and_health(db_session):
     redis.delete("k1")
     redis.delete("zset1")
     assert redis.get("k1") is None
+
+
+def test_api_mark_lesson_watched_and_list_progress(db_session):
+    """
+    Integration test: POST then GET /courses/{course_id}/lessons/progress
+    (the path the gateway forwards for /api/progress/courses/{id}/lessons/progress).
+    """
+    client = TestClient(app)
+    course_id = 7
+    headers = {"Authorization": f"Bearer {create_token(user_id=301, role='student')}"}
+    url = f"/courses/{course_id}/lessons/progress"
+
+    first = client.post(
+        url,
+        json={
+            "lesson_id": 70,
+            "total_lessons": 4,
+            "watch_duration_seconds": 120,
+            "last_position_seconds": 118,
+        },
+        headers=headers,
+    )
+    assert first.status_code == 200
+    assert first.json() == {
+        "lesson_id": 70,
+        "is_completed": True,
+        "watch_duration_seconds": 120,
+        "last_position_seconds": 118,
+    }
+
+    # Re-watching keeps the longest watch time but moves the resume position.
+    again = client.post(
+        url,
+        json={
+            "lesson_id": 70,
+            "watch_duration_seconds": 30,
+            "last_position_seconds": 10,
+        },
+        headers=headers,
+    )
+    assert again.status_code == 200
+    assert again.json()["watch_duration_seconds"] == 120
+    assert again.json()["last_position_seconds"] == 10
+
+    client.post(url, json={"lesson_id": 71, "total_lessons": 4}, headers=headers)
+
+    listed = client.get(url, headers=headers)
+    assert listed.status_code == 200
+    assert sorted(item["lesson_id"] for item in listed.json()) == [70, 71]
+
+    dashboard = client.get(f"/api/progress/courses/{course_id}", headers=headers)
+    assert dashboard.json()["watched_lessons"] == 2
+    assert dashboard.json()["completion_percentage"] == 50.0
+
+
+def test_api_lesson_progress_is_private_to_each_student(db_session):
+    client = TestClient(app)
+    url = "/courses/8/lessons/progress"
+    mine = {"Authorization": f"Bearer {create_token(user_id=302, role='student')}"}
+    other = {"Authorization": f"Bearer {create_token(user_id=303, role='student')}"}
+
+    client.post(url, json={"lesson_id": 80, "total_lessons": 2}, headers=mine)
+
+    assert client.get(url, headers=other).json() == []
+    assert len(client.get(url, headers=mine).json()) == 1
+
+
+def test_api_mark_lesson_watched_rejects_bad_requests(db_session):
+    client = TestClient(app)
+    url = "/courses/9/lessons/progress"
+    student = {"Authorization": f"Bearer {create_token(user_id=304, role='student')}"}
+    admin = {"Authorization": f"Bearer {create_token(user_id=1, role='admin')}"}
+
+    # Negative: no token
+    assert client.post(url, json={"lesson_id": 90}).status_code == 401
+    # Negative: only students record their own progress
+    assert client.post(url, json={"lesson_id": 90}, headers=admin).status_code == 403
+    # Negative: lesson_id is required and must be an integer
+    assert client.post(url, json={}, headers=student).status_code == 422
+    assert (
+        client.post(url, json={"lesson_id": "abc"}, headers=student).status_code == 422
+    )
+    # Nothing was stored by the rejected calls
+    assert client.get(url, headers=student).json() == []
